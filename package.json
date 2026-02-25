@@ -1,0 +1,22 @@
+{
+  "name": "college-baseball-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "College baseball sabermetrics API + MCP server",
+  "workspaces": [
+    "packages/*",
+    "api",
+    "sync"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b",
+    "lint": "eslint . --ext .ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@cloudflare/workers-types": "^4.20250214.0"
+  }
+}

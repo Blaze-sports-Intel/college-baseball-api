@@ -1,0 +1,19 @@
+{
+  "name": "cbb-api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "@bsi/college-baseball-analytics": "*"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0",
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.7.0"
+  }
+}

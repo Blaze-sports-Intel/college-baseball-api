@@ -1,0 +1,96 @@
+/**
+ * MCP Resource Definitions — 8 resources for college baseball analytics.
+ * Resources are read-only reference data that MCP clients can subscribe to.
+ */
+
+import {
+  MLB_WOBA_WEIGHTS,
+  DEFAULT_LEAGUE_CONTEXT,
+  HAVF_WEIGHTS,
+  MMI_WEIGHTS,
+  METRIC_GLOSSARY,
+  METHODOLOGY,
+} from '@bsi/college-baseball-analytics';
+
+export interface MCPResource {
+  uri: string;
+  name: string;
+  description: string;
+  mimeType: string;
+}
+
+export const MCP_RESOURCES: MCPResource[] = [
+  {
+    uri: 'cbb://methodology/woba',
+    name: 'wOBA Methodology',
+    description: 'wOBA formula, weight table, and derivation notes',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://methodology/fip',
+    name: 'FIP Methodology',
+    description: 'FIP formula, constant derivation, and interpretation guide',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://methodology/havf',
+    name: 'HAV-F Methodology',
+    description: 'HAV-F components, weights, and percentile ranking methodology',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://methodology/mmi',
+    name: 'MMI Methodology',
+    description: 'MMI formula, component breakdown, and classification thresholds',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://weights/current',
+    name: 'Current Weights',
+    description: 'Current linear weights, league context, and component weights',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://glossary',
+    name: 'Metric Glossary',
+    description: 'Complete glossary of all supported metrics with formulas and tier info',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://conferences',
+    name: 'Conference List',
+    description: 'All D1 conferences with strength indices',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://teams',
+    name: 'D1 Teams',
+    description: 'All 244 D1 teams with IDs and conference affiliations',
+    mimeType: 'application/json',
+  },
+];
+
+/** Resolve a resource URI to its content. Static resources return data directly; dynamic ones need DB. */
+export function resolveStaticResource(uri: string): unknown | null {
+  switch (uri) {
+    case 'cbb://methodology/woba':
+      return { ...METHODOLOGY.woba, weights: MLB_WOBA_WEIGHTS };
+    case 'cbb://methodology/fip':
+      return { ...METHODOLOGY.fip, league_context: { fipConstant: DEFAULT_LEAGUE_CONTEXT.fipConstant } };
+    case 'cbb://methodology/havf':
+      return { ...METHODOLOGY.havf, weights: HAVF_WEIGHTS };
+    case 'cbb://methodology/mmi':
+      return { ...METHODOLOGY.mmi, weights: MMI_WEIGHTS };
+    case 'cbb://weights/current':
+      return {
+        woba_weights: MLB_WOBA_WEIGHTS,
+        league_context: DEFAULT_LEAGUE_CONTEXT,
+        havf_weights: HAVF_WEIGHTS,
+        mmi_weights: MMI_WEIGHTS,
+      };
+    case 'cbb://glossary':
+      return METRIC_GLOSSARY;
+    default:
+      return null;
+  }
+}

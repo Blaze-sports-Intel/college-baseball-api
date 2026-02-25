@@ -1,0 +1,24 @@
+name = "cbb-api-sync"
+main = "src/index.ts"
+compatibility_date = "2025-02-14"
+
+# Cron trigger: every 5 minutes
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Source: BSI's production D1
+[[d1_databases]]
+binding = "SOURCE_DB"
+database_name = "bsi-prod-db"
+database_id = "6921617f-5351-4df3-aeab-07425e72ec6b"
+
+# Target: API's own D1
+[[d1_databases]]
+binding = "TARGET_DB"
+database_name = "cbb-api-db"
+database_id = "fa31fba5-1b4e-4f66-9bec-79483993c9e0"
+
+# KV for sync state
+[[kv_namespaces]]
+binding = "SYNC_STATE"
+id = "998283d0e56c43c3ae5da237a1a1905d"

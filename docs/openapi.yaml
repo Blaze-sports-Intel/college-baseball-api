@@ -1,0 +1,652 @@
+openapi: 3.1.0
+info:
+  title: College Baseball Sabermetrics API
+  description: |
+    Advanced analytics for D1 college baseball. REST API + MCP server.
+
+    Built by [Blaze Sports Intel](https://blazesportsintel.com).
+
+    ## Authentication
+
+    Free tier requires no API key. Pro and Enterprise tiers require an
+    `X-API-Key` header. Register at blazesportsintel.com/pro.
+
+    ## Tier Model
+
+    | Tier | Rate Limit | Leaderboard Rows | Advanced Metrics | Compute |
+    |------|-----------|------------------|------------------|---------|
+    | Free | 30/min | 10 | Basic only | No |
+    | Pro | 120/min | 100 | Full | Yes |
+    | Enterprise | 600/min | Unlimited | Full + bulk | Yes |
+
+    ## Rate Limiting
+
+    All responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+    and `X-RateLimit-Reset` headers.
+
+    ## MCP Server
+
+    POST to `/mcp` with JSON-RPC 2.0 payloads. 12 tools, 8 resources.
+  version: 0.1.0
+  contact:
+    name: Austin Humphrey
+    email: Austin@BlazeSportsIntel.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.blazesportsintel.com
+    description: Production
+
+security:
+  - ApiKeyAuth: []
+  - {}
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for Pro/Enterprise access. Free tier omits this header.
+
+  schemas:
+    Meta:
+      type: object
+      properties:
+        source:
+          type: string
+          example: bsi-cbb-api
+        fetched_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          enum: [America/Chicago]
+        tier:
+          type: string
+          enum: [free, pro, enterprise]
+        cache_hit:
+          type: boolean
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+        has_more:
+          type: boolean
+
+    BattingAdvanced:
+      type: object
+      properties:
+        player_id:
+          type: string
+        player_name:
+          type: string
+        team:
+          type: string
+        conference:
+          type: string
+        position:
+          type: string
+        season:
+          type: integer
+        # Traditional (free)
+        avg:
+          type: number
+        obp:
+          type: number
+        slg:
+          type: number
+        ops:
+          type: number
+        k_pct:
+          type: number
+        bb_pct:
+          type: number
+        iso:
+          type: number
+        babip:
+          type: number
+        # Advanced (pro)
+        woba:
+          type: number
+          description: Null for free tier
+        wrc_plus:
+          type: number
+          description: Null for free tier
+        ops_plus:
+          type: number
+          description: Null for free tier
+
+    PitchingAdvanced:
+      type: object
+      properties:
+        player_id:
+          type: string
+        player_name:
+          type: string
+        team:
+          type: string
+        conference:
+          type: string
+        era:
+          type: number
+        whip:
+          type: number
+        k_9:
+          type: number
+        bb_9:
+          type: number
+        # Advanced (pro)
+        fip:
+          type: number
+          description: Null for free tier
+        era_minus:
+          type: number
+          description: Null for free tier
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: Service status
+
+  /v1/meta/weights:
+    get:
+      summary: Current linear weights and league context
+      tags: [Meta]
+      responses:
+        '200':
+          description: Weights and league context values
+
+  /v1/meta/methodology:
+    get:
+      summary: Detailed methodology for all metrics
+      tags: [Meta]
+      responses:
+        '200':
+          description: Methodology descriptions with formulas
+
+  /v1/meta/methodology/{metric}:
+    get:
+      summary: Methodology for a single metric
+      tags: [Meta]
+      parameters:
+        - name: metric
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [woba, wrcPlus, fip, havf, mmi]
+      responses:
+        '200':
+          description: Metric methodology
+        '400':
+          description: Unknown metric
+
+  /v1/meta/glossary:
+    get:
+      summary: Glossary of all metrics
+      tags: [Meta]
+      responses:
+        '200':
+          description: Metric definitions with formulas and tier info
+
+  /v1/meta/glossary/{metric}:
+    get:
+      summary: Glossary entry for a single metric
+      tags: [Meta]
+      parameters:
+        - name: metric
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Metric definition
+        '400':
+          description: Unknown metric
+
+  /v1/players:
+    get:
+      summary: List players with optional filters
+      tags: [Players]
+      parameters:
+        - name: team
+          in: query
+          schema:
+            type: string
+        - name: conf
+          in: query
+          schema:
+            type: string
+        - name: pos
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of players
+
+  /v1/players/{id}:
+    get:
+      summary: Full player profile
+      tags: [Players]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Player batting and/or pitching data
+        '404':
+          description: Player not found
+
+  /v1/players/{id}/batting:
+    get:
+      summary: Player batting stats
+      tags: [Players]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Advanced batting line
+
+  /v1/players/{id}/pitching:
+    get:
+      summary: Player pitching stats
+      tags: [Players]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Advanced pitching line
+
+  /v1/leaderboards/batting:
+    get:
+      summary: Batting leaderboard sorted by any metric
+      tags: [Leaderboards]
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            default: woba
+        - name: conf
+          in: query
+          schema:
+            type: string
+        - name: pos
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Leaderboard rows
+
+  /v1/leaderboards/pitching:
+    get:
+      summary: Pitching leaderboard sorted by any metric
+      tags: [Leaderboards]
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            default: fip
+        - name: conf
+          in: query
+          schema:
+            type: string
+        - name: pos
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Leaderboard rows
+
+  /v1/teams:
+    get:
+      summary: List all D1 teams
+      tags: [Teams]
+      responses:
+        '200':
+          description: Team list with conferences
+
+  /v1/teams/{id}:
+    get:
+      summary: Team detail with roster sabermetrics
+      tags: [Teams]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team roster with batting and pitching stats
+
+  /v1/conferences:
+    get:
+      summary: Conference strength rankings
+      tags: [Conferences]
+      responses:
+        '200':
+          description: Conference list sorted by strength index
+
+  /v1/conferences/{name}:
+    get:
+      summary: Conference detail
+      tags: [Conferences]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conference strength breakdown
+
+  /v1/park-factors:
+    get:
+      summary: Venue park factors
+      tags: [Park Factors]
+      parameters:
+        - name: conf
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Park factors sorted by runs factor
+
+  /v1/compare/batting:
+    get:
+      summary: Head-to-head batting comparison (Pro)
+      tags: [Compare]
+      parameters:
+        - name: players
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated player IDs (2-5)
+      responses:
+        '200':
+          description: Side-by-side batting stats
+        '402':
+          description: Pro tier required
+
+  /v1/compare/pitching:
+    get:
+      summary: Head-to-head pitching comparison (Pro)
+      tags: [Compare]
+      parameters:
+        - name: players
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Side-by-side pitching stats
+
+  /v1/havf/leaderboard:
+    get:
+      summary: HAV-F composite leaderboard (Pro)
+      tags: [HAV-F]
+      parameters:
+        - name: conf
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        '200':
+          description: HAV-F leaderboard
+
+  /v1/havf/player/{id}:
+    get:
+      summary: HAV-F component breakdown (Pro)
+      tags: [HAV-F]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Player HAV-F scores and breakdown
+
+  /v1/mmi/game/{id}:
+    get:
+      summary: Momentum timeline for a game (Pro)
+      tags: [MMI]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MMI snapshots for the game
+
+  /v1/mmi/trending:
+    get:
+      summary: Most exciting recent games by MMI volatility (Pro)
+      tags: [MMI]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Games ranked by volatility
+
+  /v1/compute/batting:
+    post:
+      summary: Stateless batting computation (Pro)
+      description: |
+        Provide raw batting stats, receive full advanced analytics.
+        Pure math — no database lookup required.
+      tags: [Compute]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pa, ab, h, doubles, triples, hr, bb, hbp, so, sf]
+              properties:
+                pa:
+                  type: integer
+                  description: Plate appearances
+                ab:
+                  type: integer
+                h:
+                  type: integer
+                doubles:
+                  type: integer
+                triples:
+                  type: integer
+                hr:
+                  type: integer
+                bb:
+                  type: integer
+                hbp:
+                  type: integer
+                so:
+                  type: integer
+                sf:
+                  type: integer
+                parkFactor:
+                  type: number
+                  default: 1.0
+      responses:
+        '200':
+          description: Full advanced batting line with estimated metrics
+
+  /v1/compute/pitching:
+    post:
+      summary: Stateless pitching computation (Pro)
+      tags: [Compute]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ip, h, er, hr, bb, hbp, so]
+              properties:
+                ip:
+                  type: number
+                  description: Innings pitched (decimal)
+                h:
+                  type: integer
+                er:
+                  type: integer
+                hr:
+                  type: integer
+                bb:
+                  type: integer
+                hbp:
+                  type: integer
+                so:
+                  type: integer
+                fb:
+                  type: integer
+                  description: Fly balls (enables xFIP)
+                parkFactor:
+                  type: number
+                  default: 1.0
+      responses:
+        '200':
+          description: Full advanced pitching line
+
+  /mcp:
+    post:
+      summary: MCP JSON-RPC 2.0 endpoint
+      description: |
+        Connect any MCP-compatible client. Supports initialize, tools/list,
+        tools/call, resources/list, resources/read.
+
+        12 tools, 8 resources. See /v1/meta/glossary for metric definitions.
+      tags: [MCP]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jsonrpc:
+                  type: string
+                  enum: ['2.0']
+                id:
+                  type: [string, integer]
+                method:
+                  type: string
+                  enum: [initialize, tools/list, tools/call, resources/list, resources/read]
+                params:
+                  type: object
+      responses:
+        '200':
+          description: JSON-RPC 2.0 response
+
+tags:
+  - name: System
+    description: Health and status
+  - name: Meta
+    description: Weights, methodology, glossary (no auth required)
+  - name: Players
+    description: Player lookup and stats
+  - name: Leaderboards
+    description: Batting and pitching leaderboards
+  - name: Teams
+    description: Team listings and detail
+  - name: Conferences
+    description: Conference strength rankings
+  - name: Park Factors
+    description: Venue park factors
+  - name: Compare
+    description: Head-to-head comparison (Pro)
+  - name: HAV-F
+    description: BSI composite player evaluation (Pro)
+  - name: MMI
+    description: Momentum Magnitude Index (Pro)
+  - name: Compute
+    description: Stateless metric computation (Pro)
+  - name: MCP
+    description: MCP JSON-RPC 2.0 server

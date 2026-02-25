@@ -1,0 +1,26 @@
+name = "cbb-api"
+main = "src/index.ts"
+compatibility_date = "2025-02-14"
+
+workers_dev = true
+
+routes = [
+  { pattern = "api.blazesportsintel.com/*", zone_name = "blazesportsintel.com" },
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cbb-api-db"
+database_id = "fa31fba5-1b4e-4f66-9bec-79483993c9e0"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "7741a629a93a4d3e8ecdb8a06be0382e"
+
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "18c9e217239b4ae8996b9da988305300"
+
+[vars]
+ENVIRONMENT = "production"
+API_VERSION = "v1"
