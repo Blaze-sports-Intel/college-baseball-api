@@ -44,3 +44,15 @@ Full glossary at `/v1/meta/glossary`. Methodology at `/v1/meta/methodology`.
 ## License
 
 Proprietary. Contact Austin@BlazeSportsIntel.com for licensing.
+
+## Secret Hygiene
+
+This repository does not store runtime secrets in source control. Keep sensitive values in Cloudflare Workers/Pages secret bindings (for example, `wrangler secret put <NAME>`), and keep browser-facing code limited to opaque API endpoints.
+
+Before merging, run:
+
+```bash
+npm run security:smoke
+```
+
+CI also runs Gitleaks plus the same smoke check on every PR.
