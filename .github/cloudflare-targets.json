@@ -1,0 +1,24 @@
+{
+  "node_version": "20",
+  "package_manager": "npm",
+  "install_command": "npm ci",
+  "validate_command": "npm run typecheck && npm run test",
+  "targets": [
+    {
+      "id": "api",
+      "kind": "worker",
+      "working_directory": ".",
+      "project_name": "cbb-api",
+      "environment": "production",
+      "deploy_command": "npm --prefix api run deploy"
+    },
+    {
+      "id": "sync",
+      "kind": "worker",
+      "working_directory": ".",
+      "project_name": "cbb-api-sync",
+      "environment": "production",
+      "deploy_command": "npm --prefix sync run deploy"
+    }
+  ]
+}
