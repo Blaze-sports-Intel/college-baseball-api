@@ -13,8 +13,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "lint": "eslint . --ext .ts",
-    "prepare": "sh scripts/install-git-hooks.sh",
-    "hooks:install": "sh scripts/install-git-hooks.sh",
+    "prepare": "bash scripts/install-git-hooks.sh",
+    "hooks:install": "bash scripts/install-git-hooks.sh",
     "secrets:check": "python3 scripts/secret_guard.py --staged"
   },
   "devDependencies": {
