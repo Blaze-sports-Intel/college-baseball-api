@@ -1,16 +1,17 @@
 /**
  * Default weights and league context constants.
  *
- * MLB-derived until D1-specific calibration is available.
- * Documented as a known caveat — the methodology page explains the gap
- * and the plan to close it with D1 play-by-play data.
+ * V1 shipped with MLB-derived weights as the only option. V1.1 adds
+ * the season-keyed D1 reference table (Blumenfeld 2013–2022) so the
+ * stateless `/v1/compute/*` endpoints serve D1-calibrated math without
+ * relying on the cron-synced `cbb_league_context` row.
  */
 
 import type { WOBAWeights, LeagueContext } from './types';
 
 /**
- * MLB linear weights (2024 season). Used as proxy for D1.
- * Ships with V1; D1-specific weights are a V2 deliverable.
+ * MLB linear weights (2024 season).
+ * Retained as a fallback only; D1 callers should use `getD1WOBAWeights(season)`.
  */
 export const MLB_WOBA_WEIGHTS: WOBAWeights = {
   wBB: 0.69,
@@ -22,21 +23,88 @@ export const MLB_WOBA_WEIGHTS: WOBAWeights = {
 };
 
 /**
- * Default league context — MLB 2024 as baseline.
- * Used when D1 league-wide aggregates are unavailable.
- * The sync worker will compute actual D1 context once data accumulates.
+ * Per-season D1 college baseball linear weights, calibrated from
+ * D1 run-expectancy matrices.
+ *
+ * Source: Nathan Blumenfeld's `collegebaseball` package
+ * (collegebaseball/data/d1_linear_weights.csv).
+ *
+ * 2023+ has no published recompute — Blumenfeld's table clones 2022
+ * forward. We mirror that behavior in `getD1WOBAWeights()` so live
+ * queries against the current season fall back to the most recent
+ * calibrated row instead of reverting silently to MLB.
  */
-export const DEFAULT_LEAGUE_CONTEXT: LeagueContext = {
-  woba: 0.310,
-  obp: 0.314,
-  avg: 0.243,
-  slg: 0.396,
-  era: 4.17,
-  runsPerPA: 0.112,
-  wobaScale: 1.194,
-  fipConstant: 3.186,
-  hrFBRate: 0.116,
+export const D1_WOBA_WEIGHTS_BY_SEASON: Record<number, WOBAWeights> = {
+  2013: { wBB: 0.79829, wHBP: 0.81915, w1B: 0.95954, w2B: 1.35663, w3B: 1.71307, wHR: 2.01798 },
+  2014: { wBB: 0.78569, wHBP: 0.79812, w1B: 0.96545, w2B: 1.36776, w3B: 1.82269, wHR: 2.07572 },
+  2015: { wBB: 0.79783, wHBP: 0.82336, w1B: 0.95064, w2B: 1.32426, w3B: 1.64098, wHR: 1.96480 },
+  2016: { wBB: 0.78540, wHBP: 0.79660, w1B: 0.95240, w2B: 1.31270, w3B: 1.70830, wHR: 1.96578 },
+  2017: { wBB: 0.77729, wHBP: 0.79205, w1B: 0.94322, w2B: 1.30842, w3B: 1.70758, wHR: 1.95513 },
+  2018: { wBB: 0.79647, wHBP: 0.81863, w1B: 0.94821, w2B: 1.31856, w3B: 1.62259, wHR: 1.93642 },
+  2019: { wBB: 0.80637, wHBP: 0.82853, w1B: 0.94698, w2B: 1.29146, w3B: 1.60941, wHR: 1.89128 },
+  2020: { wBB: 0.79689, wHBP: 0.81968, w1B: 0.97083, w2B: 1.28144, w3B: 1.65008, wHR: 2.03670 },
+  2021: { wBB: 0.75000, wHBP: 0.76000, w1B: 0.94000, w2B: 1.32000, w3B: 1.63000, wHR: 2.07000 },
+  2022: { wBB: 0.785404, wHBP: 0.803778, w1B: 0.949848, w2B: 1.303976, w3B: 1.643932, wHR: 1.977906 },
 };
+
+/**
+ * Per-season D1 league priors that pair with the linear weights above.
+ * `runsPerPA` and `cFIP` come from the same Blumenfeld table — they're
+ * the league-level constants used for wRC+ and FIP scaling.
+ */
+export const D1_LEAGUE_PRIORS_BY_SEASON: Record<number, { runsPerPA: number; cFIP: number; wOBABaseline: number; wOBAScale: number }> = {
+  2013: { runsPerPA: 0.133, cFIP: 3.651, wOBABaseline: 0.348, wOBAScale: 1.123 },
+  2014: { runsPerPA: 0.129, cFIP: 3.525, wOBABaseline: 0.341, wOBAScale: 1.180 },
+  2015: { runsPerPA: 0.137, cFIP: 3.733, wOBABaseline: 0.349, wOBAScale: 1.105 },
+  2016: { runsPerPA: 0.139, cFIP: 3.822, wOBABaseline: 0.348, wOBAScale: 1.102 },
+  2017: { runsPerPA: 0.143, cFIP: 3.861, wOBABaseline: 0.351, wOBAScale: 1.092 },
+  2018: { runsPerPA: 0.141, cFIP: 3.841, wOBABaseline: 0.354, wOBAScale: 1.075 },
+  2019: { runsPerPA: 0.145, cFIP: 3.951, wOBABaseline: 0.355, wOBAScale: 1.045 },
+  2020: { runsPerPA: 0.139, cFIP: 3.909, wOBABaseline: 0.346, wOBAScale: 1.095 },
+  2021: { runsPerPA: 0.151, cFIP: 4.021, wOBABaseline: 0.370, wOBAScale: 0.9767 },
+  2022: { runsPerPA: 0.157, cFIP: 4.205, wOBABaseline: 0.367, wOBAScale: 0.9795 },
+};
+
+/** Latest D1 season with calibrated weights — fallback target for unknown / future seasons. */
+export const D1_LATEST_CALIBRATED_SEASON = 2022;
+
+/**
+ * Resolve D1 linear weights for a season. Falls back to the most recently
+ * calibrated season (2022) when the requested season is outside the table.
+ */
+export function getD1WOBAWeights(season?: number): WOBAWeights {
+  if (season != null && D1_WOBA_WEIGHTS_BY_SEASON[season]) {
+    return D1_WOBA_WEIGHTS_BY_SEASON[season];
+  }
+  return D1_WOBA_WEIGHTS_BY_SEASON[D1_LATEST_CALIBRATED_SEASON];
+}
+
+/** Resolve D1 league priors (runsPerPA, cFIP, wOBA baseline + scale) for a season. */
+export function getD1LeaguePriors(season?: number) {
+  if (season != null && D1_LEAGUE_PRIORS_BY_SEASON[season]) {
+    return D1_LEAGUE_PRIORS_BY_SEASON[season];
+  }
+  return D1_LEAGUE_PRIORS_BY_SEASON[D1_LATEST_CALIBRATED_SEASON];
+}
+
+/**
+ * Default league context — D1 2022 (most recent calibrated season) as baseline.
+ * Used when D1 league-wide aggregates are unavailable.
+ */
+export const DEFAULT_LEAGUE_CONTEXT: LeagueContext = (() => {
+  const priors = D1_LEAGUE_PRIORS_BY_SEASON[D1_LATEST_CALIBRATED_SEASON];
+  return {
+    woba: priors.wOBABaseline,
+    obp: 0.358,            // D1 2022 league-aggregate OBP
+    avg: 0.272,            // D1 2022 league-aggregate AVG
+    slg: 0.421,            // D1 2022 league-aggregate SLG
+    era: 5.85,             // D1 2022 league-aggregate ERA
+    runsPerPA: priors.runsPerPA,
+    wobaScale: priors.wOBAScale,
+    fipConstant: priors.cFIP,
+    hrFBRate: 0.110,
+  };
+})();
 
 /** HAV-F component weights. */
 export const HAVF_WEIGHTS = {
