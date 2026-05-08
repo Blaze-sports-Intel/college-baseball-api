@@ -428,3 +428,163 @@ describe('FIP clamp', () => {
     expect(calculateFIP(0, 0, 0, 100, 50, 0)).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// V1.2 — Marchi (baseball_R) ports: empirical Bayes, streakiness, Pythagoras
+// ---------------------------------------------------------------------------
+
+import {
+  fitBetaBinomial,
+  applyEmpiricalBayes,
+  shrinkRate,
+  findStreaks,
+  findLongestStreak,
+  findCurrentStreak,
+  findCurrentColdStreak,
+  calculateRollingRateAverage,
+  fitPythagoreanExponent,
+  calculateRunsPerWin,
+  calculateRunsFromOPS,
+} from '../src';
+import type { RateObservation, TeamSeasonRecord } from '../src';
+
+describe('fitBetaBinomial', () => {
+  it('returns weak prior for cohort < 2 valid observations', () => {
+    expect(fitBetaBinomial([{ n: 50, d: 200 }]).cohortSize).toBe(1);
+  });
+
+  it('returns infinite K when cohort variance ≤ binomial floor', () => {
+    const cohort = Array.from({ length: 100 }, () => ({ n: 60, d: 200 }));
+    const fit = fitBetaBinomial(cohort);
+    expect(fit.K).toBe(Number.POSITIVE_INFINITY);
+    expect(fit.pAll).toBeCloseTo(0.300, 3);
+  });
+
+  it('returns moderate K for realistic between-player variance', () => {
+    const cohort: RateObservation[] = [];
+    for (let i = 0; i < 100; i++) {
+      const rate = 0.200 + (i / 99) * 0.200;
+      cohort.push({ n: Math.round(rate * 200), d: 200 });
+    }
+    const fit = fitBetaBinomial(cohort);
+    expect(fit.K).toBeGreaterThan(10);
+    expect(fit.K).toBeLessThan(5000);
+  });
+});
+
+describe('applyEmpiricalBayes', () => {
+  it('full-season player barely shrinks toward league mean', () => {
+    const shrunk = applyEmpiricalBayes(210, 600, 0.300, 100);
+    expect(shrunk).toBeCloseTo(0.343, 3);
+  });
+
+  it('tiny-sample player gets pulled hard toward league mean', () => {
+    const shrunk = applyEmpiricalBayes(10, 59, 0.050, 200);
+    expect(shrunk).toBeCloseTo(0.077, 3);
+  });
+
+  it('returns league rate when K is infinite', () => {
+    expect(applyEmpiricalBayes(50, 100, 0.300, Number.POSITIVE_INFINITY)).toBeCloseTo(0.300, 6);
+  });
+});
+
+describe('shrinkRate', () => {
+  it('Robbins-style shrinkage on tiny sample regresses below raw rate', () => {
+    const cohort: RateObservation[] = [];
+    for (let i = 0; i < 100; i++) {
+      const rate = 0.025 + (i / 99) * 0.075;
+      cohort.push({ n: Math.round(rate * 200), d: 200 });
+    }
+    const fit = fitBetaBinomial(cohort);
+    const robbinsShrunk = shrinkRate(10, 51, fit);
+    expect(robbinsShrunk).toBeLessThan(0.196);
+    expect(robbinsShrunk).toBeGreaterThan(fit.pAll);
+  });
+});
+
+describe('findStreaks', () => {
+  it('Marchi reference: [1,1,1,0,1,1,0,0,1] → [3,2,1]', () => {
+    expect(findStreaks([1, 1, 1, 0, 1, 1, 0, 0, 1])).toEqual([3, 2, 1]);
+  });
+
+  it('returns empty for all-zero', () => {
+    expect(findStreaks([0, 0, 0])).toEqual([]);
+  });
+
+  it('counts trailing streak when ending mid-run', () => {
+    expect(findStreaks([0, 1, 1])).toEqual([2]);
+  });
+});
+
+describe('findLongestStreak', () => {
+  it('returns max streak length', () => {
+    expect(findLongestStreak([1, 0, 1, 1, 1, 0, 1, 1])).toBe(3);
+  });
+});
+
+describe('findCurrentStreak', () => {
+  it('trailing positive streak', () => {
+    expect(findCurrentStreak([0, 1, 1, 1])).toBe(3);
+  });
+});
+
+describe('findCurrentColdStreak', () => {
+  it('trailing 0-fer length', () => {
+    expect(findCurrentColdStreak([1, 0, 0, 0])).toBe(3);
+  });
+});
+
+describe('calculateRollingRateAverage', () => {
+  it('null entries before first full window', () => {
+    const r = calculateRollingRateAverage([1, 2, 3, 4, 5], [10, 10, 10, 10, 10], 3);
+    expect(r[0]).toBeNull();
+    expect(r[1]).toBeNull();
+    expect(r[2]).toBeCloseTo(6 / 30, 4);
+  });
+
+  it('rolls past first full window', () => {
+    const r = calculateRollingRateAverage([0, 0, 5, 0, 0], [5, 5, 5, 5, 5], 3);
+    expect(r[3]).toBeCloseTo(5 / 15, 4);
+  });
+});
+
+describe('fitPythagoreanExponent', () => {
+  it('returns 1.83 fallback for cohort < 2 records', () => {
+    expect(fitPythagoreanExponent([])).toBe(1.83);
+  });
+
+  it('produces exponent in published [1.5, 2.5] for realistic teams', () => {
+    const cohort: TeamSeasonRecord[] = [
+      { rs: 800, ra: 700, w: 95, l: 67 },
+      { rs: 700, ra: 750, w: 75, l: 87 },
+      { rs: 850, ra: 650, w: 102, l: 60 },
+    ];
+    const fit = fitPythagoreanExponent(cohort);
+    expect(fit).toBeGreaterThanOrEqual(1.5);
+    expect(fit).toBeLessThanOrEqual(2.5);
+  });
+});
+
+describe('calculateRunsPerWin', () => {
+  it('Marchi reference IR(5,5) = 10', () => {
+    expect(calculateRunsPerWin(5, 5)).toBeCloseTo(10, 1);
+  });
+
+  it('higher run environment requires more runs per win', () => {
+    expect(calculateRunsPerWin(6, 6)).toBeGreaterThan(calculateRunsPerWin(3, 3));
+  });
+
+  it('returns Infinity when RA is zero', () => {
+    expect(calculateRunsPerWin(5, 0)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('calculateRunsFromOPS', () => {
+  it('weights OBP at 1.7x SLG by default', () => {
+    expect(calculateRunsFromOPS(0.350, 0.400)).toBeCloseTo(0.995, 4);
+  });
+
+  it('honors custom weight', () => {
+    expect(calculateRunsFromOPS(0.300, 0.400, 2.0)).toBeCloseTo(1.000, 4);
+  });
+});
