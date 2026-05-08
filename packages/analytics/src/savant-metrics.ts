@@ -615,3 +615,211 @@ export function calculateWOBAAgainstDelta(
 ): number {
   return safe(wobaAgainst - leagueWOBA);
 }
+
+// ---------------------------------------------------------------------------
+// Empirical Bayes shrinkage (Marchi, baseball_R, 20140113_ShrinkingAveragesII.R)
+// ---------------------------------------------------------------------------
+
+/** A player's rate-stat observation: numerator, denominator. */
+export interface RateObservation {
+  n: number;
+  d: number;
+}
+
+/** Beta-binomial fit result — pooled mean p and prior strength K. */
+export interface BetaBinomialFit {
+  pAll: number;
+  K: number;
+  cohortSize: number;
+}
+
+/**
+ * Method-of-moments estimator for the beta-binomial prior strength K.
+ * Returns pooled rate `pAll = Σn / Σd` and K such that the implied prior
+ * has the observed cross-cohort variance. K = Infinity when cohort variance
+ * ≤ binomial floor (no signal). Clamped to [10, 5000] otherwise.
+ */
+export function fitBetaBinomial(observations: RateObservation[]): BetaBinomialFit {
+  const valid = observations.filter((o) => o.d > 0 && Number.isFinite(o.n) && Number.isFinite(o.d));
+  if (valid.length < 2) {
+    const pAll = valid.length === 1 && valid[0].d > 0 ? valid[0].n / valid[0].d : 0.300;
+    return { pAll: safe(pAll), K: 100, cohortSize: valid.length };
+  }
+  const totalN = valid.reduce((s, o) => s + o.n, 0);
+  const totalD = valid.reduce((s, o) => s + o.d, 0);
+  const pAll = totalD > 0 ? totalN / totalD : 0.300;
+
+  const observedVariance = valid.reduce((s, o) => {
+    const rate = o.d > 0 ? o.n / o.d : 0;
+    return s + (rate - pAll) ** 2;
+  }, 0) / valid.length;
+
+  const meanD = totalD / valid.length;
+  const binomialVariance = meanD > 0 ? (pAll * (1 - pAll)) / meanD : 0;
+
+  const betweenVariance = observedVariance - binomialVariance;
+  if (betweenVariance <= 0) {
+    return { pAll: safe(pAll), K: Number.POSITIVE_INFINITY, cohortSize: valid.length };
+  }
+
+  const K = clamp((pAll * (1 - pAll)) / betweenVariance - 1, 10, 5000);
+  return { pAll: safe(pAll), K: safe(K), cohortSize: valid.length };
+}
+
+/**
+ * Apply empirical Bayes shrinkage to a single player's rate.
+ * `shrunk = (n + K · pAll) / (d + K)`
+ */
+export function applyEmpiricalBayes(
+  n: number,
+  d: number,
+  pAll: number,
+  K: number,
+): number {
+  if (d <= 0 && K <= 0) return safe(pAll);
+  if (!Number.isFinite(K)) return safe(pAll);
+  return safe((n + K * pAll) / (d + K));
+}
+
+/** Shrunk rate stat from raw counts + cohort fit. */
+export function shrinkRate(n: number, d: number, fit: BetaBinomialFit): number {
+  return applyEmpiricalBayes(n, d, fit.pAll, fit.K);
+}
+
+// ---------------------------------------------------------------------------
+// Streakiness (Marchi, baseball_R, scripts/streaks.R + Chap10.streakiness.R)
+// ---------------------------------------------------------------------------
+
+/** Return all positive-run streak lengths in a binary sequence. */
+export function findStreaks(sequence: ReadonlyArray<number>): number[] {
+  const result: number[] = [];
+  let run = 0;
+  for (const v of sequence) {
+    if (v > 0) {
+      run += 1;
+    } else if (run > 0) {
+      result.push(run);
+      run = 0;
+    }
+  }
+  if (run > 0) result.push(run);
+  return result;
+}
+
+/** Length of the longest positive streak in the sequence. */
+export function findLongestStreak(sequence: ReadonlyArray<number>): number {
+  const streaks = findStreaks(sequence);
+  return streaks.length > 0 ? Math.max(...streaks) : 0;
+}
+
+/** Length of the trailing positive streak (0 if sequence ends in 0). */
+export function findCurrentStreak(sequence: ReadonlyArray<number>): number {
+  let run = 0;
+  for (let i = sequence.length - 1; i >= 0; i--) {
+    if (sequence[i] > 0) run += 1;
+    else break;
+  }
+  return run;
+}
+
+/** Length of the trailing 0-fer (Marchi's `longest.ofer` framing). */
+export function findCurrentColdStreak(sequence: ReadonlyArray<number>): number {
+  let run = 0;
+  for (let i = sequence.length - 1; i >= 0; i--) {
+    if (sequence[i] === 0) run += 1;
+    else break;
+  }
+  return run;
+}
+
+/**
+ * Rolling moving average of a rate stat over a window.
+ * Marchi's `moving.average(H, AB, width)`. Returns array aligned with input;
+ * leading entries before window-1 are null.
+ */
+export function calculateRollingRateAverage(
+  numerators: ReadonlyArray<number>,
+  denominators: ReadonlyArray<number>,
+  window: number,
+): Array<number | null> {
+  const len = Math.min(numerators.length, denominators.length);
+  if (window <= 0 || len === 0) return [];
+  const result: Array<number | null> = new Array(len).fill(null);
+  let nSum = 0;
+  let dSum = 0;
+  for (let i = 0; i < len; i++) {
+    nSum += numerators[i];
+    dSum += denominators[i];
+    if (i >= window) {
+      nSum -= numerators[i - window];
+      dSum -= denominators[i - window];
+    }
+    if (i >= window - 1 && dSum > 0) {
+      result[i] = safe(nSum / dSum);
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Pythagorean refinements (Marchi, baseball_R, Chap4.pythagoras.R)
+// ---------------------------------------------------------------------------
+
+/** A team-season pair: runs scored, runs allowed, wins, losses. */
+export interface TeamSeasonRecord {
+  rs: number;
+  ra: number;
+  w: number;
+  l: number;
+}
+
+/**
+ * Fit the Pythagorean exponent from a team cohort.
+ * Marchi: `lm(log(W/L) ~ 0 + log(R/RA))` — zero-intercept OLS slope.
+ * Returns 1.83 fallback for cohorts < 2 records or degenerate inputs.
+ * Clamped to published range [1.5, 2.5].
+ */
+export function fitPythagoreanExponent(records: ReadonlyArray<TeamSeasonRecord>): number {
+  const valid = records.filter((r) => r.rs > 0 && r.ra > 0 && r.w > 0 && r.l > 0);
+  if (valid.length < 2) return 1.83;
+
+  let sumXY = 0;
+  let sumXX = 0;
+  for (const r of valid) {
+    const x = Math.log(r.rs / r.ra);
+    const y = Math.log(r.w / r.l);
+    sumXY += x * y;
+    sumXX += x * x;
+  }
+  if (sumXX === 0) return 1.83;
+  return clamp(safe(sumXY / sumXX), 1.5, 2.5);
+}
+
+/**
+ * Marginal runs needed for one additional win at current run environment.
+ * Marchi, Chap4.pythagoras.R Section 4.7: IR(RS, RA) = (RS² + RA²)² / (2·RS·RA²)
+ */
+export function calculateRunsPerWin(rs: number, ra: number): number {
+  if (rs <= 0 || ra <= 0) return Number.POSITIVE_INFINITY;
+  const numer = (rs * rs + ra * ra) ** 2;
+  const denom = 2 * rs * ra * ra;
+  if (denom <= 0) return Number.POSITIVE_INFINITY;
+  return safe(numer / denom);
+}
+
+// ---------------------------------------------------------------------------
+// Runs-from-OPS regression (Marchi, baseball_R, 20131218_OPSregression.R)
+// ---------------------------------------------------------------------------
+
+/**
+ * OPS-component runs estimate — empirical regression weighting.
+ * Coefficient 1.7 is the published Marchi value (2000-2011 MLB team data).
+ * Better runs predictor than raw OPS.
+ */
+export function calculateRunsFromOPS(
+  obp: number,
+  slg: number,
+  obpWeight: number = 1.7,
+): number {
+  return safe(obpWeight * obp + slg);
+}

@@ -78,8 +78,19 @@ export {
   calculateLuckIndex,
   calculateWOBAAgainst,
   calculateWOBAAgainstDelta,
+  fitBetaBinomial,
+  applyEmpiricalBayes,
+  shrinkRate,
+  findStreaks,
+  findLongestStreak,
+  findCurrentStreak,
+  findCurrentColdStreak,
+  calculateRollingRateAverage,
+  fitPythagoreanExponent,
+  calculateRunsPerWin,
+  calculateRunsFromOPS,
 } from './savant-metrics';
-export type { PitcherAllowedLine } from './savant-metrics';
+export type { PitcherAllowedLine, RateObservation, BetaBinomialFit, TeamSeasonRecord } from './savant-metrics';
 
 // HAV-F
 export {
