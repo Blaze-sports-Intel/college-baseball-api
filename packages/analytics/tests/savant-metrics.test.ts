@@ -25,10 +25,21 @@ import {
   computeFullBattingLine,
   computeFullPitchingLine,
   computeEstimatedBatting,
+  calculatePythagoreanWinPct,
+  calculateLuckIndex,
+  calculateWOBAAgainst,
+  calculateWOBAAgainstDelta,
+  calculateContactRate,
+  calculatePlateDiscipline,
+  calculateXFIPFromHR9,
+  getD1WOBAWeights,
+  getD1LeaguePriors,
+  D1_WOBA_WEIGHTS_BY_SEASON,
+  D1_LATEST_CALIBRATED_SEASON,
   MLB_WOBA_WEIGHTS,
   DEFAULT_LEAGUE_CONTEXT,
 } from '../src';
-import type { BattingLine, PitchingLine } from '../src';
+import type { BattingLine, PitchingLine, PitcherAllowedLine } from '../src';
 
 // ---------------------------------------------------------------------------
 // Known-correct verification data: MSST Ace Reese (Weekend 2, Feb 2026)
@@ -300,5 +311,120 @@ describe('computeFullPitchingLine', () => {
     const withFB: PitchingLine = { ...starter, fb: 100 };
     const result = computeFullPitchingLine(withFB, DEFAULT_LEAGUE_CONTEXT);
     expect(result.xFip).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V1.1 — D1 multi-season weights, Pythagorean, wOBA-against
+// ---------------------------------------------------------------------------
+
+describe('D1 multi-season weights', () => {
+  it('has rows 2013–2022', () => {
+    for (let y = 2013; y <= 2022; y++) {
+      expect(D1_WOBA_WEIGHTS_BY_SEASON[y]).toBeDefined();
+    }
+  });
+
+  it('matches Blumenfeld 2022 reference values exactly', () => {
+    const w = D1_WOBA_WEIGHTS_BY_SEASON[2022];
+    expect(w.wBB).toBeCloseTo(0.785404, 6);
+    expect(w.wHR).toBeCloseTo(1.977906, 6);
+  });
+
+  it('getD1WOBAWeights falls back to latest calibrated season', () => {
+    expect(getD1WOBAWeights(2099)).toEqual(D1_WOBA_WEIGHTS_BY_SEASON[D1_LATEST_CALIBRATED_SEASON]);
+  });
+
+  it('getD1LeaguePriors returns runsPerPA + cFIP for season', () => {
+    const priors = getD1LeaguePriors(2022);
+    expect(priors.runsPerPA).toBeCloseTo(0.157, 4);
+    expect(priors.cFIP).toBeCloseTo(4.205, 4);
+  });
+});
+
+describe('calculatePythagoreanWinPct', () => {
+  it('returns 0.5 when both totals are zero', () => {
+    expect(calculatePythagoreanWinPct(0, 0)).toBe(0.5);
+  });
+
+  it('returns ~0.564 for 800 RS / 700 RA at exponent 1.83', () => {
+    expect(calculatePythagoreanWinPct(800, 700)).toBeCloseTo(0.564, 2);
+  });
+
+  it('clamps to [0, 1]', () => {
+    expect(calculatePythagoreanWinPct(1000, 1)).toBeLessThanOrEqual(1);
+    expect(calculatePythagoreanWinPct(1, 1000)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('calculateLuckIndex', () => {
+  it('is positive when team overperforms run differential', () => {
+    expect(calculateLuckIndex(0.6, 300, 300)).toBeCloseTo(0.1, 2);
+  });
+});
+
+describe('calculateWOBAAgainst', () => {
+  const allowed: PitcherAllowedLine = {
+    bf: 250,
+    hAllowed: 50,
+    doublesAllowed: 8,
+    triplesAllowed: 1,
+    hrAllowed: 5,
+    bbAllowed: 18,
+    hbpAllowed: 4,
+  };
+
+  it('returns 0 when BF is zero', () => {
+    expect(calculateWOBAAgainst({ ...allowed, bf: 0 })).toBe(0);
+  });
+
+  it('frames pitcher allowed line on hitter wOBA scale', () => {
+    const woba = calculateWOBAAgainst(allowed);
+    expect(woba).toBeGreaterThan(0.2);
+    expect(woba).toBeLessThan(0.5);
+  });
+
+  it('uses provided weights — D1 vs MLB produce different results', () => {
+    const mlb = calculateWOBAAgainst(allowed, MLB_WOBA_WEIGHTS);
+    const d1 = calculateWOBAAgainst(allowed, getD1WOBAWeights(2022));
+    expect(d1).not.toBeCloseTo(mlb, 3);
+  });
+});
+
+describe('calculateWOBAAgainstDelta', () => {
+  it('returns negative when pitcher suppressed wOBA below league', () => {
+    expect(calculateWOBAAgainstDelta(0.290, 0.350)).toBeCloseTo(-0.060, 4);
+  });
+});
+
+describe('calculateContactRate', () => {
+  it('complement of K%', () => {
+    expect(calculateContactRate(20, 100)).toBeCloseTo(0.80, 3);
+  });
+});
+
+describe('calculatePlateDiscipline', () => {
+  it('BB% / (BB% + K%)', () => {
+    expect(calculatePlateDiscipline(15, 20, 100)).toBeCloseTo(15 / 35, 4);
+  });
+});
+
+describe('calculateXFIPFromHR9', () => {
+  it('returns 0 when IP is zero', () => {
+    expect(calculateXFIPFromHR9(1.0, 10, 2, 50, 0, 3.5)).toBe(0);
+  });
+
+  it('produces a comparable scale to FIP', () => {
+    const x = calculateXFIPFromHR9(1.0, 10, 2, 50, 60, 3.5);
+    expect(x).toBeGreaterThan(0);
+    expect(x).toBeLessThan(8);
+  });
+});
+
+describe('FIP clamp', () => {
+  it('clamps to >= 0 — dominant K rate cannot produce negative FIP', () => {
+    // 0 HR, 0 BB, 0 HBP, 100 K over 50 IP, cFIP 0 → raw FIP = -2.0/50 + 0 = -0.04
+    // Without clamp this is negative; with clamp it's 0.
+    expect(calculateFIP(0, 0, 0, 100, 50, 0)).toBe(0);
   });
 });

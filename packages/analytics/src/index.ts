@@ -28,6 +28,11 @@ export type {
 // Weights & Constants
 export {
   MLB_WOBA_WEIGHTS,
+  D1_WOBA_WEIGHTS_BY_SEASON,
+  D1_LEAGUE_PRIORS_BY_SEASON,
+  D1_LATEST_CALIBRATED_SEASON,
+  getD1WOBAWeights,
+  getD1LeaguePriors,
   DEFAULT_LEAGUE_CONTEXT,
   HAVF_WEIGHTS,
   MMI_WEIGHTS,
@@ -47,6 +52,7 @@ export {
   calculateOPSPlus,
   calculateFIP,
   calculateXFIP,
+  calculateXFIPFromHR9,
   calculateERAMinus,
   calculateK9,
   calculateBB9,
@@ -63,7 +69,17 @@ export {
   computeFullBattingLine,
   computeFullPitchingLine,
   computeEstimatedBatting,
+  calculateContactRate,
+  calculatePlateDiscipline,
+  calculateLinearWeightRuns,
+  calculateSIERALite,
+  calculateWorkloadScore,
+  calculatePythagoreanWinPct,
+  calculateLuckIndex,
+  calculateWOBAAgainst,
+  calculateWOBAAgainstDelta,
 } from './savant-metrics';
+export type { PitcherAllowedLine } from './savant-metrics';
 
 // HAV-F
 export {
