@@ -14,7 +14,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint . --ext .ts",
     "security:smoke": "bash scripts/secret-smoke-check.sh",
-    "security:gitleaks": "gitleaks detect --verbose --redact --no-git"
+    "security:gitleaks": "gitleaks detect --verbose --redact"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
