@@ -171,7 +171,12 @@ def main() -> int:
     for finding in findings:
         location = f"{finding.path}:{finding.line}" if finding.line is not None else finding.path
         print(f"- {location} — {finding.label}", file=sys.stderr)
-        print(f"  {finding.excerpt}", file=sys.stderr)
+        if finding.line is None:
+            # Safe to show non-line-based excerpts like filenames.
+            print(f"  {finding.excerpt}", file=sys.stderr)
+        else:
+            # Do not print raw line contents that may contain secrets.
+            print("  [redacted potential secret content]", file=sys.stderr)
     return 1
 
 
