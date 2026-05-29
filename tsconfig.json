@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/analytics" },
+    { "path": "./api" },
+    { "path": "./sync" }
+  ]
+}

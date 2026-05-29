@@ -68,6 +68,18 @@ export const MCP_RESOURCES: MCPResource[] = [
     description: 'All 244 D1 teams with IDs and conference affiliations',
     mimeType: 'application/json',
   },
+  {
+    uri: 'cbb://history/sources',
+    name: 'Historical Source Registry',
+    description: 'Accepted source lanes for NCAA D1 baseball history and provenance',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'cbb://history/endpoints',
+    name: 'Historical API Endpoints',
+    description: 'BSI D1 history endpoint contract with four explicit data states',
+    mimeType: 'application/json',
+  },
 ];
 
 /** Resolve a resource URI to its content. Static resources return data directly; dynamic ones need DB. */
@@ -90,6 +102,30 @@ export function resolveStaticResource(uri: string): unknown | null {
       };
     case 'cbb://glossary':
       return METRIC_GLOSSARY;
+    case 'cbb://history/sources':
+      return {
+        canonical: ['NCAA records PDFs', 'NCAA championship dashboard', 'NCAA membership dashboard', 'official school/SID pages'],
+        supporting: ['ESPN college baseball site API', 'BSI college-baseball-api contract'],
+        lead_only: ['Scite peer-reviewed methodology searches', 'community package or forum leads'],
+        policy: 'Scite and community leads cannot override official NCAA, school, conference, ESPN, or BSI contract sources.',
+      };
+    case 'cbb://history/endpoints':
+      return {
+        state_values: ['loading', 'error', 'empty', 'populated'],
+        meta: { source: 'bsi-d1-history', fetched_at: 'source snapshot timestamp', timezone: 'America/Chicago' },
+        endpoints: [
+          '/v1/history/seasons',
+          '/v1/history/teams',
+          '/v1/history/teams/:teamId/seasons',
+          '/v1/history/games',
+          '/v1/history/games/:gameId/box-score',
+          '/v1/history/games/:gameId/play-by-play',
+          '/v1/history/tournaments',
+          '/v1/history/polls',
+          '/v1/history/awards',
+          '/v1/history/provenance/:recordId',
+        ],
+      };
     default:
       return null;
   }
