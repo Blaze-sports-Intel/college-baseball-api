@@ -169,7 +169,7 @@ def main() -> int:
     print("Secret scan blocked this change.", file=sys.stderr)
     print("Move credentials to environment or secret storage, or add an explicit allow marker for known fake values.", file=sys.stderr)
     for finding in findings:
-        location = f"{finding.path}:{finding.line}" if finding.line else finding.path
+        location = f"{finding.path}:{finding.line}" if finding.line is not None else finding.path
         print(f"- {location} — {finding.label}", file=sys.stderr)
         print(f"  {finding.excerpt}", file=sys.stderr)
     return 1
