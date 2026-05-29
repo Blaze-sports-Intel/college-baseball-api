@@ -166,4 +166,51 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['metric'],
     },
   },
+  {
+    name: 'cbb_history_games',
+    description: 'Search source-backed NCAA D1 baseball historical games. Returns state, data, and source metadata.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        season: { type: 'string', description: 'Season ID, e.g. 2026-d1' },
+        team_id: { type: 'string', description: 'Canonical team ID to filter home/away games' },
+        status: { type: 'string', description: 'Game status filter', enum: ['scheduled', 'live', 'final', 'suspended', 'forfeit', 'unknown'] },
+        limit: { type: 'string', description: 'Number of games to return' },
+      },
+    },
+  },
+  {
+    name: 'cbb_history_box_score',
+    description: 'Get source-backed team lines, batting lines, and pitching lines for a historical game.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        game_id: { type: 'string', description: 'Canonical game ID, e.g. espn_401869587' },
+      },
+      required: ['game_id'],
+    },
+  },
+  {
+    name: 'cbb_history_play_by_play',
+    description: 'Get source-backed play-by-play events for a historical game.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        game_id: { type: 'string', description: 'Canonical game ID, e.g. espn_401869587' },
+        limit: { type: 'string', description: 'Number of plays to return' },
+      },
+      required: ['game_id'],
+    },
+  },
+  {
+    name: 'cbb_history_provenance',
+    description: 'Get source provenance for a historical database record or snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        record_id: { type: 'string', description: 'Source snapshot ID' },
+      },
+      required: ['record_id'],
+    },
+  },
 ];

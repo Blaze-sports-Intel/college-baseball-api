@@ -14,7 +14,10 @@
     "typecheck": "tsc -b",
     "lint": "eslint . --ext .ts",
     "security:smoke": "bash scripts/secret-smoke-check.sh",
-    "security:gitleaks": "gitleaks detect --verbose --redact"
+    "security:gitleaks": "gitleaks detect --verbose --redact",
+    "prepare": "bash scripts/install-git-hooks.sh",
+    "hooks:install": "bash scripts/install-git-hooks.sh",
+    "secrets:check": "python3 scripts/secret_guard.py --staged"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
