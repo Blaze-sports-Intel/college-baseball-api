@@ -15,6 +15,7 @@
  *   /v1/havf/*         — HAV-F composite metric (pro)
  *   /v1/mmi/*          — Momentum index (pro)
  *   /v1/compute/*      — Stateless metric computation (pro)
+ *   /v1/history/*      — Source-backed NCAA D1 baseball history
  *   /mcp               — MCP JSON-RPC 2.0 endpoint
  *   /health            — Health check
  */
@@ -38,6 +39,7 @@ import compare from './routes/v1/compare';
 import havf from './routes/v1/havf';
 import mmi from './routes/v1/mmi';
 import compute from './routes/v1/compute';
+import history from './routes/v1/history';
 
 // MCP
 import { handleMcpRequest } from './mcp/handler';
@@ -85,6 +87,7 @@ app.route('/v1/leaderboards', leaderboards);
 app.route('/v1/teams', teams);
 app.route('/v1/conferences', conferences);
 app.route('/v1/park-factors', parkFactors);
+app.route('/v1/history', history);
 
 // ---------------------------------------------------------------------------
 // Pro-only routes

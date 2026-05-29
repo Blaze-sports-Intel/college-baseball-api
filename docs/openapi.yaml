@@ -159,6 +159,25 @@ components:
         detail:
           type: string
 
+    HistoryEnvelope:
+      type: object
+      required: [data, state, meta]
+      properties:
+        data:
+          oneOf:
+            - type: array
+              items:
+                type: object
+            - type: object
+            - type: 'null'
+        state:
+          type: string
+          enum: [loading, error, empty, populated]
+        meta:
+          $ref: '#/components/schemas/Meta'
+        error:
+          type: string
+
 paths:
   /health:
     get:
@@ -224,6 +243,180 @@ paths:
           description: Metric definition
         '400':
           description: Unknown metric
+
+  /v1/history/seasons:
+    get:
+      summary: List D1 baseball historical seasons
+      tags: [History]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Source-backed historical seasons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/teams:
+    get:
+      summary: List D1 baseball historical teams
+      tags: [History]
+      parameters:
+        - name: season
+          in: query
+          schema:
+            type: string
+            example: 2026-d1
+      responses:
+        '200':
+          description: Source-backed team list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/teams/{teamId}/seasons:
+    get:
+      summary: Team historical season rows
+      tags: [History]
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Source-backed team seasons
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/games:
+    get:
+      summary: Search D1 baseball historical games
+      tags: [History]
+      parameters:
+        - name: season
+          in: query
+          schema:
+            type: string
+            example: 2026-d1
+        - name: teamId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, live, final, suspended, forfeit, unknown]
+      responses:
+        '200':
+          description: Source-backed game rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/games/{gameId}/box-score:
+    get:
+      summary: Historical game box score
+      tags: [History]
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team, batting, and pitching lines
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/games/{gameId}/play-by-play:
+    get:
+      summary: Historical game play-by-play
+      tags: [History]
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Source-backed play-by-play rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/tournaments:
+    get:
+      summary: Tournament and championship history
+      tags: [History]
+      responses:
+        '200':
+          description: Source-backed tournament or championship rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/polls:
+    get:
+      summary: Historical poll rankings
+      tags: [History]
+      responses:
+        '200':
+          description: Source-backed poll rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/awards:
+    get:
+      summary: Historical award winners
+      tags: [History]
+      responses:
+        '200':
+          description: Source-backed award rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
+
+  /v1/history/provenance/{recordId}:
+    get:
+      summary: Historical source provenance
+      tags: [History]
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Source snapshot metadata for a record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryEnvelope'
 
   /v1/players:
     get:

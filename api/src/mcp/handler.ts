@@ -48,6 +48,25 @@ function toolResult(content: unknown, isError: boolean = false) {
   };
 }
 
+function historyMeta(fetchedAt?: string | null) {
+  return {
+    source: 'bsi-d1-history',
+    fetched_at: fetchedAt || new Date().toISOString(),
+    timezone: 'America/Chicago',
+  };
+}
+
+async function historyFetchedAt(env: Env): Promise<string | null> {
+  try {
+    const row = await env.DB.prepare(
+      'SELECT MAX(retrieved_at) AS fetched_at FROM bsi_history_source_snapshot'
+    ).first<{ fetched_at: string | null }>();
+    return row?.fetched_at || null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tool execution
 // ---------------------------------------------------------------------------
@@ -194,6 +213,65 @@ async function executeTool(
       const entry = METRIC_GLOSSARY[args.metric];
       if (!entry) return { error: `Unknown metric: ${args.metric}`, available: Object.keys(METRIC_GLOSSARY) };
       return { metric: args.metric, ...entry };
+    }
+
+    case 'cbb_history_games': {
+      const season = args.season || '2026-d1';
+      const limit = Math.min(parseInt(args.limit || '25', 10) || 25, 100);
+      let query = 'SELECT * FROM bsi_history_canonical_game WHERE season_id = ?';
+      const binds: (string | number)[] = [season];
+      if (args.team_id) {
+        query += ' AND (team_id_home = ? OR team_id_away = ?)';
+        binds.push(args.team_id, args.team_id);
+      }
+      if (args.status) {
+        query += ' AND status = ?';
+        binds.push(args.status);
+      }
+      query += ' ORDER BY date_start DESC LIMIT ?';
+      binds.push(limit);
+      const { results } = await env.DB.prepare(query).bind(...binds).all();
+      const fetchedAt = await historyFetchedAt(env);
+      return { state: results.length ? 'populated' : 'empty', data: results, meta: historyMeta(fetchedAt) };
+    }
+
+    case 'cbb_history_box_score': {
+      const teams = await env.DB.prepare(
+        'SELECT * FROM bsi_history_game_team_line WHERE game_id = ? ORDER BY home_away'
+      ).bind(args.game_id).all();
+      const batting = await env.DB.prepare(
+        'SELECT * FROM bsi_history_player_game_batting WHERE game_id = ? ORDER BY team_id, batting_order'
+      ).bind(args.game_id).all();
+      const pitching = await env.DB.prepare(
+        'SELECT * FROM bsi_history_player_game_pitching WHERE game_id = ? ORDER BY team_id, starter DESC, player_id'
+      ).bind(args.game_id).all();
+      const fetchedAt = await historyFetchedAt(env);
+      const populated = teams.results.length > 0 || batting.results.length > 0 || pitching.results.length > 0;
+      return {
+        state: populated ? 'populated' : 'empty',
+        data: { game_id: args.game_id, teams: teams.results, batting: batting.results, pitching: pitching.results },
+        meta: historyMeta(fetchedAt),
+      };
+    }
+
+    case 'cbb_history_play_by_play': {
+      const limit = Math.min(parseInt(args.limit || '400', 10) || 400, 1000);
+      const { results } = await env.DB.prepare(
+        'SELECT * FROM bsi_history_play_by_play_event WHERE game_id = ? ORDER BY sequence_number ASC LIMIT ?'
+      ).bind(args.game_id, limit).all();
+      const fetchedAt = await historyFetchedAt(env);
+      return { state: results.length ? 'populated' : 'empty', data: results, meta: historyMeta(fetchedAt) };
+    }
+
+    case 'cbb_history_provenance': {
+      const result = await env.DB.prepare(
+        `SELECT source_snapshot_id, source_system_id, source_url, snapshot_kind, retrieved_at,
+                raw_sha256, access_state, http_status, parser_version, notes
+         FROM bsi_history_source_snapshot
+         WHERE source_snapshot_id = ?`
+      ).bind(args.record_id).first();
+      const fetchedAt = await historyFetchedAt(env);
+      return { state: result ? 'populated' : 'empty', data: result || null, meta: historyMeta(fetchedAt) };
     }
 
     default:
