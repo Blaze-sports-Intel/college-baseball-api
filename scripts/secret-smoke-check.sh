@@ -16,9 +16,9 @@ exclude_globs=("--glob" "!.git/**" "--glob" "!node_modules/**" "--glob" "!packag
 
 failed=0
 for pattern in "${patterns[@]}"; do
-  if rg -n -P "${pattern}" . "${exclude_globs[@]}" > /tmp/secret_scan_hits.txt; then
+  if rg -l -P "${pattern}" . "${exclude_globs[@]}" > /dev/null; then
     echo "Potential secret pattern found for regex: ${pattern}"
-    cat /tmp/secret_scan_hits.txt
+    rg -l -P "${pattern}" . "${exclude_globs[@]}"
     failed=1
   fi
 done
@@ -26,9 +26,9 @@ done
 build_dirs=(.next out build public)
 for dir in "${build_dirs[@]}"; do
   if [[ -d "$dir" ]]; then
-    if rg -n -P "sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}" "$dir" > /tmp/build_secret_scan_hits.txt; then
+    if rg -l -P "sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}" "$dir" > /dev/null; then
       echo "Potential secret token found in build output directory: $dir"
-      cat /tmp/build_secret_scan_hits.txt
+      rg -l -P "sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}" "$dir"
       failed=1
     fi
   fi
