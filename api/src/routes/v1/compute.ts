@@ -5,9 +5,17 @@ import {
   computeFullPitchingLine,
   computeEstimatedBatting,
   DEFAULT_LEAGUE_CONTEXT,
-  MLB_WOBA_WEIGHTS,
+  getD1WOBAWeights,
+  D1_LATEST_CALIBRATED_SEASON,
 } from '@bsi/college-baseball-analytics';
 import type { BattingLine, PitchingLine } from '@bsi/college-baseball-analytics';
+
+/**
+ * Default weights for stateless `/v1/compute/*` calls — D1 latest calibrated
+ * season (Blumenfeld 2022 reference). Callers can pin to a specific season
+ * with `?season=YYYY` for historical comparisons.
+ */
+const DEFAULT_D1_WEIGHTS = getD1WOBAWeights(D1_LATEST_CALIBRATED_SEASON);
 import { buildMeta } from '../../shared/helpers';
 import { badRequest } from '../../shared/errors';
 
@@ -49,7 +57,15 @@ compute.post('/batting', async (c) => {
   };
 
   const parkFactor = typeof body.parkFactor === 'number' ? body.parkFactor : 1.0;
-  const advanced = computeFullBattingLine(stats, DEFAULT_LEAGUE_CONTEXT, parkFactor, MLB_WOBA_WEIGHTS);
+  // Allow callers to pin a specific season's weights via ?season=YYYY.
+  const seasonParam = c.req.query('season');
+  const seasonNum = seasonParam ? parseInt(seasonParam, 10) : undefined;
+  const weights = getD1WOBAWeights(seasonNum);
+  const weightsSource = seasonNum && Number.isFinite(seasonNum)
+    ? `d1-reference-${Math.min(seasonNum, D1_LATEST_CALIBRATED_SEASON)}`
+    : `d1-reference-${D1_LATEST_CALIBRATED_SEASON}`;
+
+  const advanced = computeFullBattingLine(stats, DEFAULT_LEAGUE_CONTEXT, parkFactor, weights);
 
   // Also compute estimated metrics
   const hrRate = stats.ab > 0 ? stats.hr / stats.ab : 0;
@@ -66,7 +82,8 @@ compute.post('/batting', async (c) => {
       input: stats,
       advanced,
       estimated,
-      weights_used: MLB_WOBA_WEIGHTS,
+      weights_used: weights,
+      weights_source: weightsSource,
       league_context: DEFAULT_LEAGUE_CONTEXT,
       park_factor: parkFactor,
     },

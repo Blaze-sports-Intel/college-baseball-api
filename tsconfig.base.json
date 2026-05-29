@@ -9,6 +9,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bsi/college-baseball-analytics": ["packages/analytics/src/index.ts"]
+    },
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
